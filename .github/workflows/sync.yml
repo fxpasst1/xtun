@@ -4,13 +4,15 @@ on:
   push:
     branches: [ main ]
   schedule:
-    # 每天 UTC 0 点（北京时间 8 点）自动执行一次，防止上游链接更新
     - cron: '0 0 * * *'
-  workflow_dispatch: # 允许手动点击按钮触发
+  workflow_dispatch: 
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # 授予写入权限，这是推送到仓库所必须的
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout Code
@@ -18,38 +20,48 @@ jobs:
 
       - name: Download Binaries
         run: |
-          # 远程脚本地址
           SOURCE_URL="https://www.baipiao.eu.org/xtunnel/suoha-x.sh"
           
-          echo "正在解析脚本内容..."
-          # 获取脚本并利用正则提取所有 https 开头的二进制链接
-          # 过滤重复项并保存到 urls.txt
-          curl -sL $SOURCE_URL | grep -oE 'https://[^ ]+\.(tar\.gz|zip|bin|gz|xz)' | sort -u > urls.txt
+          # 1. 下载原始脚本用于分析
+          curl -sL $SOURCE_URL -o source_script.sh
           
-          echo "发现以下链接："
+          echo "=== 正在提取下载链接 ==="
+          # 改进后的提取逻辑：
+          # 寻找包含 https 的行，去掉引号，提取 URL。不再限定文件后缀。
+          # 排除掉脚本自身的链接和一些常见的非下载链接
+          grep -E "https?://" source_script.sh | \
+          grep -oE "https?://[^ \"'<>)]+" | \
+          grep -v "baipiao.eu.org" | \
+          sort -u > urls.txt
+          
+          echo "发现的有效链接："
           cat urls.txt
           
-          # 创建存放目录（如果需要分类可以 mkdir）
+          # 2. 创建并进入目录
           mkdir -p bin/
           
-          # 循环下载
+          # 3. 循环下载
           while IFS= read -r url; do
             echo "正在下载: $url"
-            # -f 失败时不创建空文件，-L 跟随重定向，-C - 断点续传
-            curl -fL -C - --output-dir bin/ -O "$url"
+            filename=$(basename "$url")
+            # 使用 -C - 支持断点续传，-L 跟随重定向，-o 指定路径
+            curl -fL -C - "$url" -o "bin/$filename" || echo "下载失败: $url"
           done < urls.txt
+          
+          # 清理临时文件
+          rm source_script.sh urls.txt
 
       - name: Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 添加所有下载的文件
+          # 确保 bin 目录被跟踪
           git add bin/
           
-          # 检查是否有文件更新，避免产生空的 commit
+          # 检查是否有文件变化
           if git diff --staged --quiet; then
-            echo "没有新文件需要更新。"
+            echo "文件已是最新，无需更新。"
           else
             git commit -m "Auto-sync binaries: $(date +'%Y-%m-%d %H:%M:%S')"
             git push
