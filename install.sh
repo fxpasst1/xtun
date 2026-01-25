@@ -68,7 +68,7 @@ uninstall() {
 }
 
 # 解析命令行参数
-METRICS_PORT=2000
+METRICS_PORT=36443
 FORCE_UPDATE=false
 
 while getopts "p:t:k:m:ufh" opt; do
