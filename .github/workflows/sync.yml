@@ -1,0 +1,56 @@
+name: Sync Binaries from Remote Script
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # 每天 UTC 0 点（北京时间 8 点）自动执行一次，防止上游链接更新
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允许手动点击按钮触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Binaries
+        run: |
+          # 远程脚本地址
+          SOURCE_URL="https://www.baipiao.eu.org/xtunnel/suoha-x.sh"
+          
+          echo "正在解析脚本内容..."
+          # 获取脚本并利用正则提取所有 https 开头的二进制链接
+          # 过滤重复项并保存到 urls.txt
+          curl -sL $SOURCE_URL | grep -oE 'https://[^ ]+\.(tar\.gz|zip|bin|gz|xz)' | sort -u > urls.txt
+          
+          echo "发现以下链接："
+          cat urls.txt
+          
+          # 创建存放目录（如果需要分类可以 mkdir）
+          mkdir -p bin/
+          
+          # 循环下载
+          while IFS= read -r url; do
+            echo "正在下载: $url"
+            # -f 失败时不创建空文件，-L 跟随重定向，-C - 断点续传
+            curl -fL -C - --output-dir bin/ -O "$url"
+          done < urls.txt
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 添加所有下载的文件
+          git add bin/
+          
+          # 检查是否有文件更新，避免产生空的 commit
+          if git diff --staged --quiet; then
+            echo "没有新文件需要更新。"
+          else
+            git commit -m "Auto-sync binaries: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
