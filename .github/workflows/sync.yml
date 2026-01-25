@@ -1,4 +1,4 @@
-name: Sync Binaries from Remote Script
+name: Sync and Relink Binaries
 
 on:
   push:
@@ -10,7 +10,6 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # 授予写入权限，这是推送到仓库所必须的
     permissions:
       contents: write
     
@@ -18,51 +17,50 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Download Binaries
+      - name: Download and Patch Script
         run: |
           SOURCE_URL="https://www.baipiao.eu.org/xtunnel/suoha-x.sh"
+          # 你的 GitHub Raw 文件基础路径
+          MY_RAW_BASE="https://raw.githubusercontent.com/fxpasst1/xtun/main/bin"
           
-          # 1. 下载原始脚本用于分析
-          curl -sL $SOURCE_URL -o source_script.sh
+          echo "=== 1. 下载原始安装脚本 ==="
+          curl -sL $SOURCE_URL -o suoha-x.sh
           
-          echo "=== 正在提取下载链接 ==="
-          # 改进后的提取逻辑：
-          # 寻找包含 https 的行，去掉引号，提取 URL。不再限定文件后缀。
-          # 排除掉脚本自身的链接和一些常见的非下载链接
-          grep -E "https?://" source_script.sh | \
-          grep -oE "https?://[^ \"'<>)]+" | \
-          grep -v "baipiao.eu.org" | \
+          echo "=== 2. 提取并准备下载链接 ==="
+          # 提取所有二进制文件的 https 链接
+          grep -oE "https://[^ \"'<>)]+" suoha-x.sh | \
+          grep -v "suoha-x.sh" | \
+          grep -v "github.com" | \
           sort -u > urls.txt
           
-          echo "发现的有效链接："
-          cat urls.txt
-          
-          # 2. 创建并进入目录
+          echo "=== 3. 同步文件并修改脚本链接 ==="
           mkdir -p bin/
           
-          # 3. 循环下载
           while IFS= read -r url; do
-            echo "正在下载: $url"
             filename=$(basename "$url")
-            # 使用 -C - 支持断点续传，-L 跟随重定向，-o 指定路径
-            curl -fL -C - "$url" -o "bin/$filename" || echo "下载失败: $url"
+            echo "处理文件: $filename"
+            
+            # 下载二进制文件到 bin 目录
+            curl -fL "$url" -o "bin/$filename" || echo "下载失败: $url"
+            
+            # 【关键步骤】将脚本里的旧链接替换为你自己的 GitHub Raw 链接
+            # 使用 | 作为 sed 分隔符以处理 URL 中的斜杠
+            sed -i "s|$url|$MY_RAW_BASE/$filename|g" suoha-x.sh
           done < urls.txt
           
           # 清理临时文件
-          rm source_script.sh urls.txt
+          rm urls.txt
 
       - name: Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 确保 bin 目录被跟踪
-          git add bin/
+          git add suoha-x.sh bin/
           
-          # 检查是否有文件变化
           if git diff --staged --quiet; then
-            echo "文件已是最新，无需更新。"
+            echo "没有检测到任何更新。"
           else
-            git commit -m "Auto-sync binaries: $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Sync & Relink: Updated binaries and patched suoha-x.sh $(date +'%Y-%m-%d %H:%M:%S')"
             git push
           fi
