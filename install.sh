@@ -119,7 +119,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=$BIN_DIR/cloudflared tunnel --no-autoupdate --edge-ip-version 4 --protocol http2 run --token $CF_TOKEN --metrics 0.0.0.0:$METRICS_PORT
+ExecStart=$BIN_DIR/cloudflared tunnel --no-autoupdate --edge-ip-version 4 --protocol http2  --metrics 0.0.0.0:$METRICS_PORT run --token $CF_TOKEN
 Restart=on-failure
 RestartSec=5
 
