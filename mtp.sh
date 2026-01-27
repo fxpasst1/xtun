@@ -1,101 +1,66 @@
 #!/bin/bash
 
-# --- 检查 Root 权限 ---
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "\e[1;91m请使用 root 用户或 sudo 运行此脚本！\033[0m"
-    exit 1
-fi
+# 1. 变量初始化
+# 优先读取命令行 PORT 变量，默认为 38006
+PORT=${PORT:-38006}
+WORKDIR="/usr/local/bin"
+LOG_FILE="/var/log/mtg.log"
 
-# --- 颜色定义 ---
-green() { echo -e "\e[1;32m$1\033[0m"; }
-red() { echo -e "\e[1;91m$1\033[0m"; }
-purple() { echo -e "\e[1;35m$1\033[0m"; }
+# 2. 自动生成随机 Fake-TLS 密钥 (符合 MTG v2 格式)
+# 结构：ee + 32位随机16进制 + hex(cloudflare.com)
+RANDOM_HEX=$(openssl rand -hex 16)
+DOMAIN_HEX=$(echo -n "cloudflare.com" | xxd -p)
+SECRET="ee${RANDOM_HEX}${DOMAIN_HEX}"
 
-# --- 1. 参数解析 ---
-for arg in "$@"; do
-    case $arg in
-        port=*) MTP_PORT="${arg#*=}" ;;
-        *) [[ "$arg" =~ ^[0-9]+$ ]] && MTP_PORT="$arg" ;;
-    esac
-done
+# 3. 基础依赖安装
+echo "正在安装必要组件 (curl, openssl, xxd, wget)..."
+apt-get update && apt-get install -y curl openssl vim xxd wget tar >/dev/null 2>&1
 
-if [[ -z "$MTP_PORT" ]]; then
-    red "错误: 未指定端口！使用方式: bash $0 port=38006"
-    exit 1
-fi
-
-# --- 2. 环境准备 ---
-WORKDIR="/usr/local/bin/mtp"
-mkdir -p "$WORKDIR"
-systemctl stop mtg >/dev/null 2>&1
-pgrep -x mtg > /dev/null && pkill -9 mtg >/dev/null 2>&1
-
-# --- 3. 架构检测与下载 ---
-arch_type=$(uname -m)
-case "$arch_type" in
-    x86_64|amd64) arch="amd64" ;;
-    aarch64|arm64) arch="arm64" ;;
-    *) arch="amd64" ;;
+# 4. 自动识别 CPU 架构
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64)  MTG_ARCH="amd64" ;;
+    aarch64) MTG_ARCH="arm64" ;;
+    *) echo "暂时不支持的架构: $ARCH"; exit 1 ;;
 esac
 
-URL="https://github.com/9seconds/mtg/releases/download/v2.1.7/mtg-2.1.7-linux-$arch.tar.gz"
+# 5. 清理旧进程
+pkill mtg-bin 2>/dev/null
+rm -f $WORKDIR/mtg-bin
 
-green "正在为 $arch 架构下载 mtg (v2.1.7)..."
-wget -qO- "$URL" | tar xz -C "$WORKDIR" --strip-components=1
+# 6. 下载并安装 MTG v2.1.7
+echo "正在为 $ARCH 架构下载 MTG v2.1.7..."
+DOWNLOAD_URL="https://github.com/9seconds/mtg/releases/download/v2.1.7/mtg-2.1.7-linux-${MTG_ARCH}.tar.gz"
+wget -qO- $DOWNLOAD_URL | tar -xz -C /tmp
+mv /tmp/mtg-*/mtg $WORKDIR/mtg-bin
+chmod +x $WORKDIR/mtg-bin
+rm -rf /tmp/mtg-*
 
-if [ ! -f "${WORKDIR}/mtg" ]; then
-    red "下载失败，请检查网络！"
-    exit 1
+# 7. 获取公网 IP (用于生成链接)
+IP=$(curl -s --max-time 5 ifconfig.me || curl -s --max-time 5 api.ipify.org)
+
+# 8. 配置防火墙 (NAT 小鸡通常在面板开启端口，这里尝试在系统内放行)
+if command -v ufw >/dev/null 2>&1; then
+    ufw allow $PORT/tcp >/dev/null 2>&1
 fi
-chmod +x "${WORKDIR}/mtg"
+iptables -I INPUT -p tcp --dport $PORT -j ACCEPT >/dev/null 2>&1
 
-# --- 4. 生成带 ee 前缀的混淆密钥 ---
-# 生成 32 位随机 16 进制字符，并在开头添加 ee
-RANDOM_HEX=$(openssl rand -hex 16)
-SECRET="ee${RANDOM_HEX}"
+# 9. 启动服务 (绑定 0.0.0.0 适用于 NAT 映射)
+echo "正在启动 MTProto 服务..."
+nohup $WORKDIR/mtg-bin simple-run 0.0.0.0:$PORT $SECRET > $LOG_FILE 2>&1 &
 
-# --- 5. 配置 Systemd 服务 ---
-cat <<EOF > /etc/systemd/system/mtg.service
-[Unit]
-Description=MTProxy mtg Service
-After=network.target
+# 10. 设置开机自启 (Crontab 方式)
+(crontab -l 2>/dev/null | grep -v "mtg-bin"; echo "@reboot nohup $WORKDIR/mtg-bin simple-run 0.0.0.0:$PORT $SECRET > $LOG_FILE 2>&1 &") | crontab -
 
-[Service]
-Type=simple
-User=root
-WorkingDirectory=$WORKDIR
-ExecStart=$WORKDIR/mtg run $SECRET -b 0.0.0.0:$MTP_PORT
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# --- 6. 启动并设置开机自启 ---
-systemctl daemon-reload
-systemctl enable mtg
-systemctl start mtg
-
-sleep 2
-
-if systemctl is-active --quiet mtg; then
-    # --- 7. 获取公网 IP 并生成链接 ---
-    IP=$(curl -s https://api.ipify.org || curl -s ip.sb)
-    LINK="tg://proxy?server=$IP&port=$MTP_PORT&secret=$SECRET"
-    
-    purple "\n================ 安装成功 ================"
-    green "监听端口: $MTP_PORT"
-    green "混淆密钥: $SECRET (Fake-TLS)"
-    purple "\nTG 分享链接 (已启用混淆):"
-    green "$LINK"
-    purple "\n服务管理命令:"
-    echo "查看状态: systemctl status mtg"
-    echo "停止服务: systemctl stop mtg"
-    echo "启动服务: systemctl start mtg"
-    purple "=========================================="
-    
-    echo "$LINK" > "$WORKDIR/link.txt"
-else
-    red "启动失败！请检查端口 $MTP_PORT 是否被占用或防火墙是否放行。"
-fi
+# 输出结果
+echo "------------------------------------------------"
+echo "✅ MTProto 代理部署完成！"
+echo "架构: $ARCH"
+echo "公网 IP: $IP"
+echo "监听端口: $PORT (请确保 NAT 面板已映射此端口)"
+echo "密钥: $SECRET"
+echo "------------------------------------------------"
+echo "🔗 Telegram 一键连接链接:"
+echo "tg://proxy?server=$IP&port=$PORT&secret=$SECRET"
+echo "------------------------------------------------"
+echo "💡 查看运行日志: tail -f $LOG_FILE"
