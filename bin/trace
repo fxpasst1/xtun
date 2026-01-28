@@ -1,10 +1,10 @@
-fl=15f970
+fl=467f50
 h=www.cloudflare.com
-ip=172.208.153.210
-ts=1769516808.997
+ip=20.169.74.227
+ts=1769561148.872
 visit_scheme=https
 uag=curl/8.5.0
-colo=DFW
+colo=SJC
 sliver=none
 http=http/2
 loc=US
