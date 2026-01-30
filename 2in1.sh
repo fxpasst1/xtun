@@ -63,14 +63,33 @@ echo -e "${BLUE}--- 2. 生成配置文件 ---${PLAIN}"
 mkdir -p /etc/xray
 cat > /etc/xray/config.json <<EOF
 {
-    "inbounds": [{
-        "port": $MY_XP,
-        "listen": "127.0.0.1",
-        "protocol": "vless",
-        "settings": { "clients": [{"id": "$MY_UUID"}], "decryption": "none" },
-        "streamSettings": { "network": "ws", "wsSettings": {"path": "$MY_PATH"} }
-    }],
-    "outbounds": [{ "protocol": "freedom" }]
+	"inbounds": [
+		{
+			"port": $MY_XP,
+			"listen": "localhost",
+			"protocol": "vless",
+			"settings": {
+				"decryption": "none",
+				"clients": [
+					{
+						"id": "$MY_UUID"
+					}
+				]
+			},
+			"streamSettings": {
+				"network": "ws",
+				"wsSettings": {
+					"path": "$MY_PATH"
+				}
+			}
+		}
+	],
+	"outbounds": [
+		{
+			"protocol": "freedom",
+			"settings": {}
+		}
+	]
 }
 EOF
 
