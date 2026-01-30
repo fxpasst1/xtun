@@ -3,7 +3,7 @@
 # ========================================================
 # NAT 小鸡全能一键脚本：全参数化极致性能版
 # 支持：cloudflared (Optimized) + x-tunnel + Xray
-# CF_TOKEN=你的CF_Token XTUN_TOKEN=你的XTUN_Token XP=40001 TP=40002 bash <(curl -Ls https://raw.githubusercontent.com/你的用户名/你的仓库/main/install.sh)
+# CF_TOKEN=你的CF_Token XTUN_TOKEN=你的XTUN_Token XP=40001 TP=40002 bash <(curl -Ls https://raw.githubusercontent.com/你的用户名/你的仓库/main/2in1.sh)
 # ========================================================
 
 # 颜色定义
