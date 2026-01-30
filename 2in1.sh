@@ -3,7 +3,7 @@
 # ========================================================
 # NAT 小鸡全能一键脚本：全参数化极致性能版
 # 支持：cloudflared (Optimized) + x-tunnel + Xray
-# CF_TOKEN=你的CF_Token XTUN_TOKEN=你的XTUN_Token XP=40001 TP=40002 bash <(curl -Ls https://raw.githubusercontent.com/你的用户名/你的仓库/main/2in1.sh)
+# CF_TOKEN=你的CF_Token XTUN_TOKEN=你的XTUN_Token XP=40001 TP=40002 MP=40003 bash <(curl -Ls https://raw.githubusercontent.com/你的用户名/你的仓库/main/2in1.sh)
 # ========================================================
 
 # 颜色定义
@@ -16,9 +16,10 @@ PLAIN='\033[0m'
 MY_CF_TOKEN=${CF_TOKEN}
 MY_XTUN_TOKEN=${XTUN_TOKEN}
 MY_UUID=${UUID:-$(cat /proc/sys/kernel/random/uuid)}
-# 端口参数化：XP 为 Xray 端口，TP 为 x-tunnel 端口
+# 端口参数化：XP 为 Xray 端口，TP 为 x-tunnel 端口 ,mP 为 Metrics 端口
 MY_XP=${XP:-40001}
 MY_TP=${TP:-40002}
+MY_MP=${TP:-40003}
 
 # 检查必要参数
 if [[ -z "$MY_CF_TOKEN" || -z "$MY_XTUN_TOKEN" ]]; then
@@ -72,8 +73,8 @@ Type=simple
 # - cloudflared 强制 http2 协议
 ExecStart=/bin/bash -c " \\
     /usr/local/bin/xray -c /etc/xray/config.json & \\
-    /usr/local/bin/x-tunnel -t $MY_XTUN_TOKEN -p $MY_TP & \\
-    /usr/local/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token $MY_CF_TOKEN"
+    /usr/local/bin/x-tunnel  -l ws://127.0.0.1:$MY_TP -token $MY_XTUN_TOKEN  & \\
+    /usr/local/bin/cloudflared tunnel --no-autoupdate --protocol http2  --metrics 0.0.0.0:$MY_XP run --token $MY_CF_TOKEN"
 Restart=on-failure
 User=root
 
