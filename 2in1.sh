@@ -52,7 +52,7 @@ curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/clou
 # 下载 x-tunnel (注意：必须使用 RAW 链接)
 echo -e "${GREEN}正在下载 x-tunnel...${PLAIN}"
 # 修正后的 RAW 链接地址
-curl -L "https://raw.githubusercontent.com/fxpasst1/xtun/refs/heads/main/bin/xtun-linux-${XTUN_ARCH}" -o /usr/local/bin/x-tunnel
+curl -L "https://raw.githubusercontent.com/fxpasst1/xtun/refs/heads/main/bin/x-tunnel-linux-${XTUN_ARCH}" -o /usr/local/bin/x-tunnel
 
 # 下载 Xray (官方源)
 echo -e "${GREEN}正在下载 Xray...${PLAIN}"
