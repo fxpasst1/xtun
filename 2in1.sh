@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ========================================================
-# NAT 小鸡全能脚本：双隧道+Xray 参数修正版
+# NAT 小鸡全能脚本：修正下载逻辑与参数版
 # ========================================================
 
 # 颜色
@@ -23,23 +23,47 @@ if [[ -z "$MY_CF_TOKEN" || -z "$MY_XTUN_TOKEN" ]]; then
     exit 1
 fi
 
-echo -e "${BLUE}--- 1. 下载并安装二进制 (强制覆盖) ---${PLAIN}"
-ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+echo -e "${BLUE}--- 1. 识别架构并下载组件 ---${PLAIN}"
+
+# 架构判定逻辑
+case "$(uname -m)" in
+    x86_64 | x64 | amd64 )
+        XRAY_ARCH="64"
+        CF_ARCH="amd64"
+        XTUN_ARCH="amd64"
+        ;;
+    arm64 | aarch64 )
+        XRAY_ARCH="arm64-v8a"
+        CF_ARCH="arm64"
+        XTUN_ARCH="arm64"
+        ;;
+    *)
+        echo -e "${RED}不支持的架构: $(uname -m)${PLAIN}"
+        exit 1
+        ;;
+esac
+
 apt update && apt install -y curl wget jq tar unzip sudo || apk add curl wget jq tar unzip bash
 
-# Cloudflared
-wget -O /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARCH
-# X-tunnel (确保文件名一致)
-wget -O /usr/local/bin/x-tunnel https://github.com/fxpasst1/xtun/raw/main/bin/xtun-linux-$ARCH
-# Xray (精确提取)
-wget -O /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-$ARCH.zip
+# 下载 Cloudflared
+echo -e "${GREEN}正在下载 Cloudflared...${PLAIN}"
+curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /usr/local/bin/cloudflared
+
+# 下载 x-tunnel
+echo -e "${GREEN}正在下载 x-tunnel...${PLAIN}"
+curl -L "https://github.com/fxpasst1/xtun/raw/main/bin/xtun-linux-${XTUN_ARCH}" -o /usr/local/bin/x-tunnel
+
+# 下载 Xray (使用修正后的 64 位命名规则)
+echo -e "${GREEN}正在下载 Xray...${PLAIN}"
+curl -L "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${XRAY_ARCH}.zip" -o /tmp/xray.zip
+
+# 2. 解压与权限
 unzip -o /tmp/xray.zip -d /tmp/xray_temp
 mv /tmp/xray_temp/xray /usr/local/bin/xray
+chmod +x /usr/local/bin/cloudflared /usr/local/bin/x-tunnel /usr/local/bin/xray
 rm -rf /tmp/xray*
 
-chmod +x /usr/local/bin/cloudflared /usr/local/bin/x-tunnel /usr/local/bin/xray
-
-echo -e "${BLUE}--- 2. 生成 Xray 配置 ---${PLAIN}"
+echo -e "${BLUE}--- 2. 配置 Xray ---${PLAIN}"
 mkdir -p /etc/xray
 cat > /etc/xray/config.json <<EOF
 {
@@ -56,7 +80,7 @@ EOF
 
 echo -e "${BLUE}--- 3. 部署独立 Systemd 服务 ---${PLAIN}"
 
-# 服务 1: Xray
+# Xray Service
 cat > /etc/systemd/system/nat-xray.service <<EOF
 [Unit]
 Description=Xray Service
@@ -68,20 +92,19 @@ Restart=on-failure
 User=root
 EOF
 
-# 服务 2: x-tunnel (参数修正)
+# x-tunnel Service (修正参数)
 cat > /etc/systemd/system/nat-xtun.service <<EOF
 [Unit]
 Description=x-tunnel Service
 After=network.target
 
 [Service]
-# 使用您指定的参数格式
 ExecStart=/usr/local/bin/x-tunnel -l ws://127.0.0.1:$MY_TP -token $MY_XTUN_TOKEN
 Restart=on-failure
 User=root
 EOF
 
-# 服务 3: cloudflared
+# cloudflared Service
 cat > /etc/systemd/system/nat-cf.service <<EOF
 [Unit]
 Description=Cloudflared Tunnel
@@ -93,23 +116,30 @@ Restart=on-failure
 User=root
 EOF
 
-# 4. 启动并验证
+# 4. 启动与展示
 systemctl daemon-reload
-systemctl stop nat-xray nat-xtun nat-cf 2>/dev/null
-systemctl enable nat-xray nat-xtun nat-cf
-systemctl start nat-xray nat-xtun nat-cf
+systemctl enable --now nat-xray nat-xtun nat-cf
 
-echo -e "${GREEN}服务已尝试启动，等待 5 秒检查状态...${PLAIN}"
-sleep 5
+sleep 3
 clear
 echo -e "${BLUE}======================================================${PLAIN}"
-printf "%-20s %-15s\n" "服务名称" "当前状态"
+echo -e "${GREEN}部署完成！当前服务运行状态预览：${PLAIN}"
 echo -e "------------------------------------------------------"
-printf "%-20s %-15s\n" "nat-xray" "$(systemctl is-active nat-xray)"
-printf "%-20s %-15s\n" "nat-xtun" "$(systemctl is-active nat-xtun)"
-printf "%-20s %-15s\n" "nat-cf" "$(systemctl is-active nat-cf)"
+check_status() {
+    status=$(systemctl is-active $1)
+    if [ "$status" == "active" ]; then
+        echo -e "$1: ${GREEN}● $status${PLAIN}"
+    else
+        echo -e "$1: ${RED}○ $status${PLAIN}"
+    fi
+}
+check_status "nat-xray"
+check_status "nat-xtun"
+check_status "nat-cf"
 echo -e "------------------------------------------------------"
-echo -e "${BLUE}如果状态不是 active，请手动运行以下命令排错：${PLAIN}"
-echo -e "Xray 报错: ${GREEN}journalctl -u nat-xray --no-pager -n 20${PLAIN}"
-echo -e "XTun 报错: ${GREEN}journalctl -u nat-xtun --no-pager -n 20${PLAIN}"
+echo -e "${BLUE}常用命令 UI 提示：${PLAIN}"
+echo -e " 查看 Xray 日志: ${GREEN}journalctl -u nat-xray -f${PLAIN}"
+echo -e " 查看 XTun 日志: ${GREEN}journalctl -u nat-xtun -f${PLAIN}"
+echo -e " 查看 CF 日志:   ${GREEN}journalctl -u nat-cf -f${PLAIN}"
+echo -e " 查看所有端口:   ${GREEN}netstat -tlpn${PLAIN}"
 echo -e "${BLUE}======================================================${PLAIN}"
