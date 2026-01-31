@@ -44,7 +44,7 @@ echo -e "${GREEN}正在下载二进制组件...${PLAIN}"
 curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -o /usr/local/bin/cloudflared
 
 # x-tunnel (使用 RAW 链接并校验)
-curl -L "https://raw.githubusercontent.com/fxpasst1/xtun/refs/heads/main/bin/xtun-linux-${XTUN_ARCH}" -o /usr/local/bin/x-tunnel
+curl -L "https://raw.githubusercontent.com/fxpasst1/xtun/main/bin/xtun-linux-${XTUN_ARCH}" -o /usr/local/bin/x-tunnel
 if [ $(wc -c <"/usr/local/bin/x-tunnel") -lt 10000 ]; then
     echo -e "${RED}错误：x-tunnel 下载失败 (HTML 404)，请检查仓库路径。${PLAIN}"
     exit 1
