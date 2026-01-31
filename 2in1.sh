@@ -14,7 +14,7 @@ PLAIN='\033[0m'
 # 1. 参数提取与默认值
 MY_CF_TOKEN=${CF_TOKEN}
 MY_XTUN_TOKEN=${XTUN_TOKEN}
-MY_DOMAIN=${DOMAIN}            # 您的 CF 隧道域名 (如 ushevless.gcpsg.tk)
+MY_DOMAIN=${DOMAIN}            # 您的 CF 隧道域名 (如 )
 MY_BEST_CF=${BEST_CF:-"cf.090227.xyz"} # 连接地址 (如优选域名)
 MY_UUID=${UUID:-$(cat /proc/sys/kernel/random/uuid)}
 MY_XP=${XP:-40001}             # Xray 监听端口
