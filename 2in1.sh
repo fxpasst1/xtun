@@ -93,6 +93,7 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/xray run -c /etc/xray/config.json
 Restart=on-failure
+RestartSec=5s
 User=root
 EOF
 
@@ -104,6 +105,7 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/x-tunnel -l ws://127.0.0.1:$MY_TP -token $MY_XTUN_TOKEN
 Restart=on-failure
+RestartSec=5s
 User=root
 EOF
 
@@ -115,6 +117,7 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --protocol http2 --metrics 0.0.0.0:$MY_MP run --token $MY_CF_TOKEN
 Restart=on-failure
+RestartSec=5s
 User=root
 EOF
 
