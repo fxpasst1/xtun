@@ -8,7 +8,7 @@ PLAIN='\033[0m'
 
 # ================= 配置区域 =================
 # 统一使用 /usr/local/bin，避免 LXC 在 /root 下的权限限制
-BIN_DIR="/usr/local/bin"
+BIN_DIR="/opt/suoha"
 XTUN_REPO_BASE="https://raw.githubusercontent.com/fxpasst1/xtun/main/bin"
 # ===========================================
 
@@ -58,7 +58,7 @@ uninstall() {
     systemctl disable xtunnel  2>/dev/null
     rm -f /etc/systemd/system/xtunnel.service
     systemctl daemon-reload
-    rm -f "$BIN_DIR/x-tunnel" "$BIN_DIR/cloudflared"
+    rm -f "$BIN_DIR/x-tunnel"
     echo -e "${GREEN}卸载完成。${PLAIN}"
     exit 0
 }
