@@ -334,8 +334,8 @@ then
 fi
 if [ $protocol == 2 ]
 then
-    echo -e vless链接已经生成, www.visa.com.sg 可替换为CF优选IP'\n' >/opt/suoha/v2ray.txt
-    echo 'vless://'$uuid'@www.visa.com.sg:443?encryption=none&security=tls&type=ws&host='$domain'&path='$urlpath'#'$(echo $isp | sed -e 's/_/%20/g' -e 's/,/%2C/g')'_tls' >>/opt/suoha/v2ray.txt
+    echo -e vless链接已经生成, saas.sin.fan 可替换为CF优选IP'\n' >/opt/suoha/v2ray.txt
+    echo 'vless://'$uuid'@saas.sin.fan:443?encryption=none&security=tls&type=ws&host='$domain'&path='$urlpath'#'$(echo $isp | sed -e 's/_/%20/g' -e 's/,/%2C/g')'_tls' >>/opt/suoha/v2ray.txt
 fi
 
 # 配置服务
@@ -447,7 +447,7 @@ read -p "请选择模式: " mode
 
 if [ $mode == 1 ] || [ $mode == 2 ]; then
     read -p "选择协议 (1.vmess 2.vless, 默认1): " protocol
-    [ -z "$protocol" ] && protocol=1
+    [ -z "$protocol" ] && protocol=2
     read -p "连接模式 (4/6, 默认4): " ips
     [ -z "$ips" ] && ips=4
     isp=$(curl -$ips -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18"-"$30}' | sed -e 's/ /_/g')
