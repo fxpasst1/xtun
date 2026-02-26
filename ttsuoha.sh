@@ -250,8 +250,11 @@ if [ -z "$domain" ]; then
 fi
 
 uuid=$(cat /proc/sys/kernel/random/uuid)
-urlpath=$(echo $uuid | awk -F- '{print $1}')
-port=$[$RANDOM+10000]
+#urlpath=$(echo $uuid | awk -F- '{print $1}')
+#port=$[$RANDOM+10000]
+
+urlpath="vless"
+port=8004
 
 # 生成 Xray 配置
 if [ $protocol == 1 ]
@@ -339,7 +342,7 @@ fi
 if [ "$(grep -i PRETTY_NAME /etc/os-release | cut -d \" -f2 | awk '{print $1}')" == "Alpine" ]
 then
 cat>/etc/local.d/cloudflared.start<<EOF
-/opt/suoha/cloudflared-linux tunnel --no-autoupdate run --token $tunnel_token &
+/opt/suoha/cloudflared-linux tunnel --no-autoupdate  --protocol http2   run --token $tunnel_token &
 EOF
 cat>/etc/local.d/xray.start<<EOF
 /opt/suoha/xray run -config /opt/suoha/config.json &
@@ -357,7 +360,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/suoha/cloudflared-linux tunnel --no-autoupdate run --token $tunnel_token
+ExecStart=/opt/suoha/cloudflared-linux tunnel --no-autoupdate  --protocol http2   run --token $tunnel_token
 Restart=on-failure
 RestartSec=5s
 
