@@ -254,7 +254,7 @@ uuid=$(cat /proc/sys/kernel/random/uuid)
 #port=$[$RANDOM+10000]
 
 urlpath="vless"
-port=8004
+port=8001
 
 # 生成 Xray 配置
 if [ $protocol == 1 ]
