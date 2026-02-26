@@ -65,11 +65,10 @@ uninstall() {
 
 # 4. 参数处理
 METRICS_PORT=2000
-while getopts "p:t:m:u" opt; do
+while getopts "p:t:u" opt; do
     case $opt in
         p) WSPORT=$OPTARG ;;
         t) XTUN_TOKEN=$OPTARG ;;
-        m) METRICS_PORT=$OPTARG ;;
         u) uninstall ;;
         *) usage ;;
     esac
