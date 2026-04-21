@@ -8,7 +8,7 @@ PLAIN='\033[0m'
 
 # ================= 配置区域 =================
 # 统一使用 /usr/local/bin，避免 LXC 在 /root 下的权限限制
-BIN_DIR="/opt/suoha"
+BIN_DIR="/usr/local/bin"
 XTUN_REPO_BASE="https://raw.githubusercontent.com/fxpasst1/xtun/main/bin"
 # ===========================================
 
