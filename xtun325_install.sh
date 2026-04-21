@@ -9,7 +9,7 @@ PLAIN='\033[0m'
 # ================= 配置区域 =================
 # 统一使用 /usr/local/bin，避免 LXC 在 /root 下的权限限制
 BIN_DIR="/opt/suoha"
-XTUN_REPO_BASE="https://raw.githubusercontent.com/fxpasst1/xtun/main/bin"
+XTUN_REPO_BASE="https://raw.githubusercontent.com/mygv001/xtun325/main/bin/xt"
 # ===========================================
 
 [[ $EUID -ne 0 ]] && echo -e "${RED}请使用 root 用户运行${PLAIN}" && exit 1
