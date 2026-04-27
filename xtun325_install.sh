@@ -7,17 +7,26 @@ YELLOW='\033[0;33m'
 PLAIN='\033[0m'
 
 # ================= 配置区域 =================
-# 统一使用 /usr/local/bin，避免 LXC 在 /root 下的权限限制
 BIN_DIR="/usr/local/bin"
 XTUN_REPO_BASE="https://raw.githubusercontent.com/mygv001/xtun325/main/bin/xt"
 # ===========================================
 
 [[ $EUID -ne 0 ]] && echo -e "${RED}请使用 root 用户运行${PLAIN}" && exit 1
 
+# --- 系统检测 ---
+if [ -f /etc/alpine-release ]; then
+    OS="alpine"
+elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
+    OS="debian"
+else
+    # 默认为 Systemd 类系统尝试运行
+    OS="debian"
+fi
+
 usage() {
     echo -e "${YELLOW}使用方法:${PLAIN}"
-    echo "  bash xtun_install.sh -p <wsport> -t <token> [-m <metrics_port>]"
-    echo "  bash xtun_install.sh -u (卸载)"
+    echo "  bash $0 -p <wsport> -t <token>"
+    echo "  bash $0 -u (卸载)"
     exit 1
 }
 
@@ -28,11 +37,21 @@ get_arch() {
         x86_64) echo "amd64" ;;
         aarch64|arm64) echo "arm64" ;;
         s390x) echo "s390x" ;;
-        *) echo "不支持的架构: $arch"; exit 1 ;;
+        *) echo -e "${RED}不支持的架构: $arch${PLAIN}"; exit 1 ;;
     esac
 }
 
-# 2. 下载并严格校验
+# 2. 依赖安装
+prepare_env() {
+    echo -e "${YELLOW}正在检查基础依赖...${PLAIN}"
+    if [ "$OS" == "alpine" ]; then
+        apk add --no-cache curl ca-certificates bash
+    else
+        apt-get update && apt-get install -y curl ca-certificates
+    fi
+}
+
+# 3. 下载二进制文件
 download_binaries() {
     local ARCH=$(get_arch)
     mkdir -p $BIN_DIR
@@ -40,31 +59,34 @@ download_binaries() {
     echo -e "${YELLOW}正在同步二进制文件 ($ARCH)...${PLAIN}"
 
     # 下载 x-tunnel
-    echo -e "下载 x-tunnel..."
     curl -L -f "$XTUN_REPO_BASE/x-tunnel-linux-$ARCH" -o "$BIN_DIR/x-tunnel"
     if [[ $? -ne 0 ]]; then
-        echo -e "${RED}错误：x-tunnel 下载失败，请检查网络或 GitHub 链接是否正确。${PLAIN}"
+        echo -e "${RED}错误：x-tunnel 下载失败，请检查网络。${PLAIN}"
         exit 1
     fi
     chmod +x "$BIN_DIR/x-tunnel"
 
-    echo -e "${GREEN}下载并校准权限成功。文件位置: $BIN_DIR${PLAIN}"
+    echo -e "${GREEN}下载成功。文件位置: $BIN_DIR/x-tunnel${PLAIN}"
 }
 
-# 3. 卸载逻辑
+# 4. 卸载逻辑
 uninstall() {
-    echo -e "${YELLOW}停止服务并清理...${PLAIN}"
-    systemctl stop xtunnel  2>/dev/null
-    systemctl disable xtunnel  2>/dev/null
-    rm -f /etc/systemd/system/xtunnel.service
-    systemctl daemon-reload
+    echo -e "${YELLOW}正在清理服务...${PLAIN}"
+    if [ "$OS" == "alpine" ]; then
+        rc-service xtunnel stop 2>/dev/null
+        rc-update del xtunnel default 2>/dev/null
+        rm -f /etc/init.d/xtunnel
+    else
+        systemctl disable --now xtunnel 2>/dev/null
+        rm -f /etc/systemd/system/xtunnel.service
+        systemctl daemon-reload
+    fi
     rm -f "$BIN_DIR/x-tunnel"
     echo -e "${GREEN}卸载完成。${PLAIN}"
     exit 0
 }
 
-# 4. 参数处理
-METRICS_PORT=2000
+# 5. 参数处理
 while getopts "p:t:u" opt; do
     case $opt in
         p) WSPORT=$OPTARG ;;
@@ -76,12 +98,15 @@ done
 
 [[ -z "$WSPORT" || -z "$XTUN_TOKEN" ]] && usage
 
+prepare_env
 download_binaries
 
-# 5. 写入 Systemd 服务 (采用绝对路径和修正后的参数)
-echo -e "${YELLOW}正在配置 Systemd 服务...${PLAIN}"
+# 6. 配置并启动服务
+echo -e "${YELLOW}正在为 $OS 配置服务启动项...${PLAIN}"
 
-cat > /etc/systemd/system/xtunnel.service <<EOF
+if [ "$OS" == "debian" ]; then
+    # Systemd 模式
+    cat > /etc/systemd/system/xtunnel.service <<EOF
 [Unit]
 Description=X-Tunnel Service
 After=network.target
@@ -89,7 +114,6 @@ After=network.target
 [Service]
 Type=simple
 User=root
-# 根据你报错中的命令格式修正：使用 -l 参数指向本地 ws 地址
 ExecStart=$BIN_DIR/x-tunnel -l ws://127.0.0.1:$WSPORT -token $XTUN_TOKEN
 Restart=on-failure
 RestartSec=5
@@ -97,12 +121,33 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+    systemctl daemon-reload
+    systemctl enable --now xtunnel
+    STATUS=$(systemctl is-active xtunnel)
 
-systemctl daemon-reload
-systemctl enable --now xtunnel
+elif [ "$OS" == "alpine" ]; then
+    # OpenRC 模式
+    cat > /etc/init.d/xtunnel <<EOF
+#!/sbin/openrc-run
+description="X-Tunnel Service"
+command="$BIN_DIR/x-tunnel"
+command_args="-l ws://127.0.0.1:$WSPORT -token $XTUN_TOKEN"
+command_background="yes"
+pidfile="/run/\${RC_SVCNAME}.pid"
+restart_delay=5
+
+depend() {
+    need net
+}
+EOF
+    chmod +x /etc/init.d/xtunnel
+    rc-update add xtunnel default
+    rc-service xtunnel start
+    STATUS=$(rc-service xtunnel status | awk '{print $3}')
+fi
 
 echo -e "------------------------------------------------"
-echo -e "${GREEN}安装成功！${PLAIN}"
-echo -e "二进制路径: $BIN_DIR/x-tunnel"
-echo -e "x-tunnel 状态: $(systemctl is-active xtunnel)"
+echo -e "${GREEN}安装成功！系统类型: $OS${PLAIN}"
+echo -e "运行参数: -p $WSPORT -t $XTUN_TOKEN"
+echo -e "x-tunnel 状态: $STATUS"
 echo -e "------------------------------------------------"
