@@ -110,7 +110,7 @@ ExecStart=$BIN_DIR/x-tunnel -l ws://127.0.0.1:$WSPORT -token $XTUN_TOKEN
 Restart=always
 RestartSec=3
 # 128M 小鸡建议限制单个进程占用
-MemoryLimit=64M
+# MemoryLimit=128M
 
 [Install]
 WantedBy=multi-user.target
